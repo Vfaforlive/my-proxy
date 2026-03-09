@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ProxyGate</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #07080d;
+      --surface: #0d0f18;
+      --border: #1a1f35;
+      --accent: #00e5ff;
+      --accent2: #7b2fff;
+      --green: #00ff9d;
+      --red: #ff4060;
+      --text: #c8d0e8;
+      --muted: #4a5070;
+      --font-mono: 'Space Mono', monospace;
+      --font-display: 'Syne', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .glow-orb {
+      position: fixed;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(123,47,255,0.08) 0%, transparent 70%);
+      top: -200px; right: -200px;
+      pointer-events: none;
+      z-index: 0;
+      animation: orb-drift 12s ease-in-out infinite alternate;
+    }
+    @keyframes orb-drift {
+      from { transform: translate(0,0); }
+      to { transform: translate(-60px, 80px); }
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 56px;
+      animation: fade-down 0.6s ease both;
+    }
+    @keyframes fade-down {
+      from { opacity:0; transform:translateY(-20px); }
+      to { opacity:1; transform:translateY(0); }
+    }
+
+    .logo-area .tag {
+      font-size: 10px;
+      color: var(--accent);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .logo-area h1 {
+      font-family: var(--font-display);
+      font-size: 42px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1;
+    }
+    .logo-area h1 span { color: var(--accent); }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,255,157,0.05);
+      border: 1px solid rgba(0,255,157,0.2);
+      border-radius: 100px;
+      padding: 8px 16px;
+      font-size: 11px;
+      color: var(--green);
+      letter-spacing: 2px;
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity:1; }
+      50% { opacity:0.3; }
+    }
+
+    /* Flow diagram */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 40px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      overflow-x: auto;
+      animation: fade-down 0.6s 0.1s ease both;
+    }
+    .flow-node {
+      flex: 1;
+      min-width: 120px;
+      text-align: center;
+    }
+    .flow-node .icon {
+      font-size: 24px;
+      margin-bottom: 6px;
+    }
+    .flow-node .label {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .flow-node .name {
+      font-size: 13px;
+      color: var(--text);
+      margin-top: 2px;
+    }
+    .flow-arrow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 8px;
+      color: var(--accent);
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .flow-arrow .arrow-label {
+      font-size: 9px;
+      color: var(--accent);
+      letter-spacing: 1px;
+      margin-top: 2px;
+      white-space: nowrap;
+    }
+
+    /* Proxy input */
+    .proxy-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 24px;
+      animation: fade-down 0.6s 0.2s ease both;
+    }
+    .proxy-box label {
+      display: block;
+      font-size: 10px;
+      color: var(--accent);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+    .url-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .url-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,229,255,0.08); }
+    .url-input::placeholder { color: var(--muted); }
+
+    .btn-fetch {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      padding: 14px 28px;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-fetch:hover { background: #fff; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,229,255,0.3); }
+    .btn-fetch:active { transform: translateY(0); }
+    .btn-fetch:disabled { background: var(--muted); cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* Log terminal */
+    .terminal {
+      background: #050507;
+      border: 1px solid #1a1f35;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 24px;
+      display: none;
+      animation: fade-down 0.3s ease both;
+    }
+    .terminal.visible { display: block; }
+    .terminal-header {
+      background: #0d0f18;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .t-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .terminal-title { font-size: 10px; color: var(--muted); letter-spacing: 3px; margin-left: 4px; }
+    .terminal-body { padding: 16px; min-height: 80px; max-height: 180px; overflow-y: auto; }
+    .log-line {
+      font-size: 12px;
+      line-height: 1.9;
+      display: flex;
+      gap: 12px;
+      opacity: 0;
+      animation: fade-in 0.3s ease forwards;
+    }
+    @keyframes fade-in { to { opacity:1; } }
+    .log-time { color: #2a3050; flex-shrink: 0; }
+    .log-info { color: var(--muted); }
+    .log-req { color: var(--accent); }
+    .log-ok { color: var(--green); }
+    .log-err { color: var(--red); }
+
+    /* Result */
+    .result-box {
+      background: var(--surface);
+      border: 1px solid rgba(0,255,157,0.2);
+      border-radius: 12px;
+      overflow: hidden;
+      display: none;
+      animation: fade-down 0.4s ease both;
+    }
+    .result-box.visible { display: block; }
+    .result-header {
+      background: rgba(0,255,157,0.04);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid rgba(0,255,157,0.1);
+    }
+    .result-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
+    .result-label { font-size: 10px; color: var(--green); letter-spacing: 3px; }
+    .result-url { font-size: 11px; color: var(--muted); margin-left: auto; }
+    .result-content { padding: 24px; }
+    .result-content h2 { font-family: var(--font-display); color: #fff; font-size: 20px; margin-bottom: 12px; }
+    .result-content p { font-size: 13px; color: var(--muted); line-height: 1.8; }
+
+    /* Code section */
+    .code-section {
+      margin-top: 48px;
+      animation: fade-down 0.6s 0.3s ease both;
+    }
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 11px;
+      color: var(--accent2);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .code-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: -1px;
+    }
+    .tab {
+      padding: 8px 20px;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      cursor: pointer;
+      border: 1px solid transparent;
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      background: transparent;
+      font-family: var(--font-mono);
+      transition: all 0.2s;
+    }
+    .tab.active {
+      color: var(--accent);
+      border-color: var(--border);
+      background: var(--surface);
+    }
+    .tab:hover:not(.active) { color: var(--text); }
+
+    .code-block {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0 8px 8px 8px;
+      overflow: hidden;
+    }
+    .code-block.active { display: block; }
+
+    .code-header {
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.3);
+    }
+    .code-lang { font-size: 10px; color: var(--accent2); letter-spacing: 3px; }
+    .copy-btn {
+      font-size: 10px;
+      color: var(--muted);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 12px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      transition: all 0.2s;
+    }
+    .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+    pre {
+      padding: 24px;
+      font-size: 12px;
+      line-height: 1.9;
+      overflow-x: auto;
+      color: #c8d0e8;
+    }
+
+    /* Syntax colors */
+    .k { color: #7b2fff; }   /* keyword */
+    .f { color: #00e5ff; }   /* function */
+    .s { color: #00ff9d; }   /* string */
+    .c { color: #4a5070; font-style: italic; }  /* comment */
+    .n { color: #ff9d00; }   /* number/const */
+
+    /* Explanation cards */
+    .explain-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 32px;
+    }
+    @media (max-width: 600px) { .explain-grid { grid-template-columns: 1fr; } }
+
+    .explain-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      animation: fade-down 0.6s ease both;
+    }
+    .explain-card:nth-child(2) { animation-delay: 0.05s; }
+    .explain-card:nth-child(3) { animation-delay: 0.1s; }
+    .explain-card:nth-child(4) { animation-delay: 0.15s; }
+
+    .explain-card .step-num {
+      font-size: 10px;
+      color: var(--accent);
+      letter-spacing: 3px;
+      margin-bottom: 8px;
+    }
+    .explain-card h3 {
+      font-family: var(--font-display);
+      font-size: 15px;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .explain-card p {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+    .explain-card code {
+      background: rgba(0,229,255,0.08);
+      color: var(--accent);
+      border-radius: 3px;
+      padding: 1px 6px;
+      font-size: 11px;
+    }
+
+    /* Warning */
+    .warning {
+      margin-top: 40px;
+      background: rgba(255,64,96,0.06);
+      border: 1px solid rgba(255,64,96,0.25);
+      border-radius: 10px;
+      padding: 18px 22px;
+      display: flex;
+      gap: 14px;
+      font-size: 12px;
+      color: #ff8090;
+      line-height: 1.8;
+    }
+    .warning .warn-icon { font-size: 18px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+<div class="glow-orb"></div>
+
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-area">
+      <div class="tag">// web proxy</div>
+      <h1>Proxy<span>Gate</span></h1>
+    </div>
+    <div class="status-pill">
+      <div class="status-dot"></div>
+      SERVER ONLINE
+    </div>
+  </header>
+
+  <!-- Flow diagram -->
+  <div class="flow">
+    <div class="flow-node">
+      <div class="icon">🧑‍💻</div>
+      <div class="label">Client</div>
+      <div class="name">Du / Browser</div>
+    </div>
+    <div class="flow-arrow">→<div class="arrow-label">HTTPS</div></div>
+    <div class="flow-node">
+      <div class="icon">🔷</div>
+      <div class="label">Proxy</div>
+      <div class="name">ProxyGate</div>
+    </div>
+    <div class="flow-arrow">→<div class="arrow-label">fetch()</div></div>
+    <div class="flow-node">
+      <div class="icon">🌐</div>
+      <div class="label">Ziel</div>
+      <div class="name">Zielwebsite</div>
+    </div>
+    <div class="flow-arrow" style="color:#4a5070">✕<div class="arrow-label" style="color:#4a5070">geblockt</div></div>
+    <div class="flow-node">
+      <div class="icon">🔥</div>
+      <div class="label">Firewall</div>
+      <div class="name">sieht nur Proxy</div>
+    </div>
+  </div>
+
+  <!-- Proxy input -->
+  <div class="proxy-box">
+    <label>// URL eingeben und proxyen</label>
+    <div class="input-row">
+      <input id="urlInput" class="url-input" type="text" placeholder="https://example.com" />
+      <button class="btn-fetch" id="fetchBtn" onclick="runProxy()">FETCH →</button>
+    </div>
+  </div>
+
+  <!-- Terminal log -->
+  <div class="terminal" id="terminal">
+    <div class="terminal-header">
+      <div class="t-dot" style="background:#ff4060"></div>
+      <div class="t-dot" style="background:#ff9d00"></div>
+      <div class="t-dot" style="background:#00ff9d"></div>
+      <span class="terminal-title">// SERVER LOG</span>
+    </div>
+    <div class="terminal-body" id="logBody"></div>
+  </div>
+
+  <!-- Result -->
+  <div class="result-box" id="resultBox">
+    <div class="result-header">
+      <div class="result-dot"></div>
+      <span class="result-label">PROXIED RESPONSE</span>
+      <span class="result-url" id="resultUrl"></span>
+    </div>
+    <div class="result-content" id="resultContent"></div>
+  </div>
+
+  <!-- Code explanation -->
+  <div class="code-section">
+    <div class="section-title">Code-Erklärung</div>
+
+    <div class="code-tabs">
+      <button class="tab active" onclick="switchTab('server')">SERVER (Node.js)</button>
+      <button class="tab" onclick="switchTab('rewrite')">URL-REWRITING</button>
+      <button class="tab" onclick="switchTab('deploy')">DEPLOYMENT</button>
+    </div>
+
+    <!-- Tab: Server -->
+    <div class="code-block active" id="tab-server">
+      <div class="code-header">
+        <span class="code-lang">JAVASCRIPT / NODE.JS</span>
+        <button class="copy-btn" onclick="copyCode('server-code')">KOPIEREN</button>
+      </div>
+      <pre id="server-code"><span class="c">// server.js — Kern des Web-Proxys</span>
+<span class="k">const</span> express = <span class="f">require</span>(<span class="s">'express'</span>);
+<span class="k">const</span> fetch   = <span class="f">require</span>(<span class="s">'node-fetch'</span>);
+<span class="k">const</span> app     = <span class="f">express</span>();
+
+app.<span class="f">use</span>(express.<span class="f">static</span>(<span class="s">'public'</span>));  <span class="c">// Frontend ausliefern</span>
+
+<span class="c">// ① Haupt-Route: empfängt Anfrage vom Browser</span>
+app.<span class="f">get</span>(<span class="s">'/proxy'</span>, <span class="k">async</span> (req, res) => {
+  <span class="k">const</span> target = req.query.url;          <span class="c">// z.B. https://example.com</span>
+  <span class="k">if</span> (!target) <span class="k">return</span> res.<span class="f">status</span>(<span class="n">400</span>).<span class="f">send</span>(<span class="s">'Keine URL'</span>);
+
+  <span class="c">// ② Server fetcht die Zielseite (nicht der Browser!)</span>
+  <span class="k">const</span> response = <span class="k">await</span> <span class="f">fetch</span>(target, {
+    headers: { <span class="s">'User-Agent'</span>: <span class="s">'Mozilla/5.0'</span> }
+  });
+
+  <span class="k">let</span> html = <span class="k">await</span> response.<span class="f">text</span>();
+
+  <span class="c">// ③ Alle Links umschreiben → laufen wieder durch Proxy</span>
+  html = html.<span class="f">replace</span>(<span class="s">/href="(https?:\/\/.*?)"/g</span>,
+    (_, u) => <span class="s">`href="/proxy?url=${</span><span class="f">encodeURIComponent</span>(u)<span class="s">}"`</span>
+  );
+
+  <span class="c">// ④ Umgeschriebenes HTML an Browser senden</span>
+  res.<span class="f">send</span>(html);
+});
+
+app.<span class="f">listen</span>(<span class="n">3000</span>, () => console.<span class="f">log</span>(<span class="s">'Proxy läuft auf :3000'</span>));</pre>
+    </div>
+
+    <!-- Tab: Rewriting -->
+    <div class="code-block" id="tab-rewrite">
+      <div class="code-header">
+        <span class="code-lang">URL-REWRITING DETAIL</span>
+        <button class="copy-btn" onclick="copyCode('rewrite-code')">KOPIEREN</button>
+      </div>
+      <pre id="rewrite-code"><span class="c">// Das Herzstück: URL-Rewriting</span>
+<span class="c">// Ohne das würden Links auf der Zielseite direkt laden</span>
+<span class="c">// und an der Firewall scheitern.</span>
+
+<span class="k">function</span> <span class="f">rewriteHtml</span>(html, baseUrl) {
+  <span class="k">const</span> base = <span class="k">new</span> <span class="f">URL</span>(baseUrl);
+
+  <span class="c">// Absolute Links: href="https://..."</span>
+  html = html.<span class="f">replace</span>(
+    <span class="s">/href="(https?:\/\/[^"]+)"/g</span>,
+    (_, u) => <span class="s">`href="/proxy?url=${</span><span class="f">encodeURIComponent</span>(u)<span class="s">}"`</span>
+  );
+
+  <span class="c">// Relative Links: href="/pfad/seite"</span>
+  html = html.<span class="f">replace</span>(
+    <span class="s">/href="(\/[^"]+)"/g</span>,
+    (_, path) => <span class="s">`href="/proxy?url=${</span><span class="f">encodeURIComponent</span>(base.origin + path)<span class="s">}"`</span>
+  );
+
+  <span class="c">// Bilder umschreiben: src="https://..."</span>
+  html = html.<span class="f">replace</span>(
+    <span class="s">/src="(https?:\/\/[^"]+)"/g</span>,
+    (_, u) => <span class="s">`src="/proxy-asset?url=${</span><span class="f">encodeURIComponent</span>(u)<span class="s">}"`</span>
+  );
+
+  <span class="k">return</span> html;
+}
+
+<span class="c">// Bilder & Assets durchleiten</span>
+app.<span class="f">get</span>(<span class="s">'/proxy-asset'</span>, <span class="k">async</span> (req, res) => {
+  <span class="k">const</span> resp = <span class="k">await</span> <span class="f">fetch</span>(req.query.url);
+  resp.body.<span class="f">pipe</span>(res);  <span class="c">// Stream direkt weiterleiten</span>
+});</pre>
+    </div>
+
+    <!-- Tab: Deploy -->
+    <div class="code-block" id="tab-deploy">
+      <div class="code-header">
+        <span class="code-lang">BASH / DEPLOYMENT</span>
+        <button class="copy-btn" onclick="copyCode('deploy-code')">KOPIEREN</button>
+      </div>
+      <pre id="deploy-code"><span class="c"># 1. Projekt aufsetzen</span>
+mkdir proxy-server && cd proxy-server
+npm init -y
+npm install express node-fetch
+
+<span class="c"># 2. Dateien anlegen</span>
+touch server.js
+mkdir public && touch public/index.html
+
+<span class="c"># 3. Server starten (lokal)</span>
+node server.js
+<span class="c"># → http://localhost:3000</span>
+
+<span class="c"># ─── Deployment auf einem echten Server ───</span>
+
+<span class="c"># Option A: Railway (kostenlos, einfach)</span>
+npm install -g @railway/cli
+railway login
+railway init
+railway up
+
+<span class="c"># Option B: Render.com</span>
+<span class="c"># → Repo auf GitHub pushen</span>
+<span class="c"># → render.com → "New Web Service" → Node</span>
+
+<span class="c"># Option C: Eigener VPS (z.B. Hetzner)</span>
+ssh root@DEINE_IP
+apt install nodejs npm
+git clone https://github.com/du/proxy
+cd proxy && npm install
+<span class="c"># Mit PM2 dauerhaft laufen lassen:</span>
+npm install -g pm2
+pm2 start server.js
+pm2 save && pm2 startup</pre>
+    </div>
+  </div>
+
+  <!-- Explanation cards -->
+  <div class="explain-grid" style="margin-top:40px;">
+    <div class="section-title" style="grid-column:1/-1">Wie es funktioniert</div>
+
+    <div class="explain-card">
+      <div class="step-num">SCHRITT 01</div>
+      <h3>Browser → Proxy</h3>
+      <p>Du gibst eine URL ein. Dein Browser sendet die Anfrage an <code>/proxy?url=...</code> auf deinem Server — nicht direkt zur Zielseite. Die Firewall sieht nur diese eine Verbindung.</p>
+    </div>
+    <div class="explain-card">
+      <div class="step-num">SCHRITT 02</div>
+      <h3>Server fetcht serverseitig</h3>
+      <p>Node.js ruft die Zielseite mit <code>fetch()</code> auf. Das passiert auf dem Server, nicht im Browser — der Server steht außerhalb der Firewall oder im Internet.</p>
+    </div>
+    <div class="explain-card">
+      <div class="step-num">SCHRITT 03</div>
+      <h3>URL-Rewriting</h3>
+      <p>Alle Links im HTML werden umgeschrieben: <code>href="https://x.com"</code> wird zu <code>href="/proxy?url=https://x.com"</code>. So läuft auch Navigation weiter durch den Proxy.</p>
+    </div>
+    <div class="explain-card">
+      <div class="step-num">SCHRITT 04</div>
+      <h3>Response zurück</h3>
+      <p>Das umgeschriebene HTML wird an den Browser geliefert. Der Nutzer surft normal — jede Seite läuft unsichtbar durch den Proxy-Server.</p>
+    </div>
+  </div>
+
+  <!-- Warning -->
+  <div class="warning">
+    <div class="warn-icon">⚠️</div>
+    <div><strong>Hinweis:</strong> Das Umgehen von Unternehmens- oder Schul-Firewalls kann gegen Nutzungsbedingungen oder lokale Gesetze verstoßen. Dieses Projekt ist für Lernzwecke und den Einsatz auf eigenen Netzwerken gedacht. Bitte prüfe vorher, was in deinem Kontext erlaubt ist.</div>
+  </div>
+
+</div>
+
+<script>
+  // Demo-Daten für die Proxy-Simulation
+  const DEMO = {
+    "example.com": {
+      title: "Example Domain",
+      body: "This domain is for use in illustrative examples in documents. You may use this domain in literature without prior coordination or asking for permission.",
+      meta: "93 Bytes HTML • 200 OK"
+    },
+    "wikipedia.org": {
+      title: "Wikipedia — Die freie Enzyklopädie",
+      body: "Wikipedia ist ein Projekt zum Aufbau einer Enzyklopädie aus freien Inhalten, zu denen du sehr gern beitragen kannst. Seit Mai 2001 sind 2.897.467 Artikel in deutscher Sprache entstanden.",
+      meta: "148 KB HTML • 200 OK"
+    },
+    "github.com": {
+      title: "GitHub: Let's build from here",
+      body: "GitHub is where over 100 million developers shape the future of software, together. Contribute to the open source community, manage your Git repositories, review code like a pro...",
+      meta: "212 KB HTML • 200 OK"
+    }
+  };
+
+  let logCount = 0;
+
+  function addLog(text, cls) {
+    const body = document.getElementById('logBody');
+    const time = new Date().toLocaleTimeString('de-DE');
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.style.animationDelay = '0ms';
+    line.innerHTML = `<span class="log-time">[${time}]</span><span class="${cls}">${text}</span>`;
+    body.appendChild(line);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function runProxy() {
+    const input = document.getElementById('urlInput');
+    const url = input.value.trim();
+    if (!url) return;
+
+    const btn = document.getElementById('fetchBtn');
+    btn.disabled = true;
+    btn.textContent = 'FETCHING...';
+
+    // Show & clear terminal
+    const terminal = document.getElementById('terminal');
+    terminal.classList.add('visible');
+    document.getElementById('logBody').innerHTML = '';
+    document.getElementById('resultBox').classList.remove('visible');
+
+    const clean = url.replace(/^https?:\/\//, '').split('/')[0];
+
+    addLog(`→ Anfrage empfangen: ${url}`, 'log-req');
+    await sleep(500);
+    addLog(`⟳ DNS-Auflösung für ${clean}...`, 'log-info');
+    await sleep(400);
+    addLog(`⟳ TCP-Verbindung aufgebaut`, 'log-info');
+    await sleep(300);
+    addLog(`⟳ HTTPS-Handshake abgeschlossen`, 'log-info');
+    await sleep(600);
+    addLog(`⟳ GET ${url} HTTP/1.1`, 'log-req');
+    await sleep(700);
+    addLog(`✓ 200 OK — Antwort erhalten`, 'log-ok');
+    await sleep(300);
+    addLog(`⟳ HTML wird geparst...`, 'log-info');
+    await sleep(300);
+    addLog(`⟳ Links werden umgeschrieben (URL-Rewriting)...`, 'log-info');
+    await sleep(400);
+    addLog(`✓ Proxy-Response bereit → wird an Browser gesendet`, 'log-ok');
+
+    const demo = DEMO[clean] || {
+      title: clean,
+      body: `Auf einem echten Server würde hier der vollständige Inhalt von "${url}" erscheinen — serverseitig gefetcht und mit umgeschriebenen URLs ausgeliefert.`,
+      meta: "? KB HTML • 200 OK"
+    };
+
+    document.getElementById('resultUrl').textContent = demo.meta;
+    document.getElementById('resultContent').innerHTML = `
+      <h2>${demo.title}</h2>
+      <p>${demo.body}</p>
+    `;
+    document.getElementById('resultBox').classList.add('visible');
+
+    btn.disabled = false;
+    btn.textContent = 'FETCH →';
+  }
+
+  // Tab switching
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.code-block').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+  }
+
+  // Copy code
+  function copyCode(id) {
+    const text = document.getElementById(id).innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      event.target.textContent = '✓ KOPIERT';
+      setTimeout(() => event.target.textContent = 'KOPIEREN', 2000);
+    });
+  }
+
+  // Enter key
+  document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') runProxy();
+  });
+</script>
+</body>
+</html>
