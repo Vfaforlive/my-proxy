@@ -2,61 +2,39 @@ const express = require('express');
 const fetch = require('node-fetch');
 const app = express();
 
+// Cache: speichert bereits geladene Seiten
+const cache = new Map();
+const CACHE_TIME = 5 * 60 * 1000; // 5 Minuten
+
 app.use(express.static('public'));
 
-// Hilfsfunktion: relative URLs zu absoluten machen
 function toAbsolute(url, base) {
-  try {
-    return new URL(url, base).href;
-  } catch {
-    return null;
-  }
+  try { return new URL(url, base).href; } catch { return null; }
 }
 
-// Hilfsfunktion: URL durch Proxy leiten
 function proxyUrl(url, base) {
   try {
     const absolute = toAbsolute(url, base);
     if (!absolute) return url;
-    if (absolute.startsWith('data:')) return url; // data: URLs nicht anfassen
+    if (absolute.startsWith('data:')) return url;
     return '/proxy?url=' + encodeURIComponent(absolute);
-  } catch {
-    return url;
-  }
+  } catch { return url; }
 }
 
-// Alle URLs im HTML umschreiben
 function rewriteHtml(html, baseUrl) {
-  // href=" ... "
   html = html.replace(/href="([^"]+)"/g, (_, u) => `href="${proxyUrl(u, baseUrl)}"`);
   html = html.replace(/href='([^']+)'/g, (_, u) => `href='${proxyUrl(u, baseUrl)}'`);
-
-  // src=" ... "
   html = html.replace(/src="([^"]+)"/g, (_, u) => `src="${proxyUrl(u, baseUrl)}"`);
   html = html.replace(/src='([^']+)'/g, (_, u) => `src='${proxyUrl(u, baseUrl)}'`);
-
-  // srcset=" ... "
   html = html.replace(/srcset="([^"]+)"/g, (_, srcset) => {
     const rewritten = srcset.replace(/(https?:\/\/[^\s,]+)/g, u => proxyUrl(u, baseUrl));
     return `srcset="${rewritten}"`;
   });
-
-  // action=" ... " (Forms)
   html = html.replace(/action="([^"]+)"/g, (_, u) => `action="${proxyUrl(u, baseUrl)}"`);
-
-  // url( ... ) in inline styles
   html = html.replace(/url\(['"]?(https?:\/\/[^'")\s]+)['"]?\)/g, (_, u) => `url(${proxyUrl(u, baseUrl)})`);
-
-  // @import in style tags
   html = html.replace(/@import\s+['"]?(https?:\/\/[^'";\s]+)['"]?/g, (_, u) => `@import '${proxyUrl(u, baseUrl)}'`);
-
-  // Meta refresh
-  html = html.replace(/content="0;url=([^"]+)"/g, (_, u) => `content="0;url=${proxyUrl(u, baseUrl)}"`);
-
-  // Base tag entfernen (würde Proxy-URLs kaputt machen)
   html = html.replace(/<base[^>]*>/gi, '');
 
-  // Inject script um JS-Fetches abzufangen
   const inject = `
 <script>
 (function() {
@@ -79,25 +57,26 @@ function rewriteHtml(html, baseUrl) {
 </script>`;
 
   html = html.replace('</head>', inject + '</head>');
-
   return html;
 }
 
-// CSS umschreiben
 function rewriteCss(css, baseUrl) {
-  css = css.replace(/url\(['"]?((?!data:)[^'")\s]+)['"]?\)/g, (_, u) => {
-    return `url(${proxyUrl(u, baseUrl)})`;
-  });
-  css = css.replace(/@import\s+['"]?(https?:\/\/[^'";\s]+)['"]?/g, (_, u) => {
-    return `@import '${proxyUrl(u, baseUrl)}'`;
-  });
+  css = css.replace(/url\(['"]?((?!data:)[^'")\s]+)['"]?\)/g, (_, u) => `url(${proxyUrl(u, baseUrl)})`);
+  css = css.replace(/@import\s+['"]?(https?:\/\/[^'";\s]+)['"]?/g, (_, u) => `@import '${proxyUrl(u, baseUrl)}'`);
   return css;
 }
 
-// Haupt-Proxy Route
 app.get('/proxy', async (req, res) => {
   const target = req.query.url;
   if (!target) return res.status(400).send('Keine URL angegeben');
+
+  // Cache prüfen
+  const cached = cache.get(target);
+  if (cached && Date.now() - cached.time < CACHE_TIME) {
+    res.set('Content-Type', cached.contentType);
+    res.set('X-Cache', 'HIT'); // zeigt dass Cache benutzt wurde
+    return res.send(cached.data);
+  }
 
   try {
     const response = await fetch(target, {
@@ -107,31 +86,39 @@ app.get('/proxy', async (req, res) => {
         'Accept-Language': 'de,en;q=0.9',
         'Accept-Encoding': 'identity'
       },
-      redirect: 'follow'
+      redirect: 'follow',
+      // Timeout nach 10 Sekunden
+      timeout: 10000
     });
 
     const contentType = response.headers.get('content-type') || '';
 
-    // Security headers entfernen die Proxy blockieren würden
     res.removeHeader('X-Frame-Options');
     res.removeHeader('Content-Security-Policy');
     res.set('Content-Type', contentType);
+    // Browser soll auch cachen (1 Minute)
+    res.set('Cache-Control', 'public, max-age=60');
+
+    let data;
 
     if (contentType.includes('text/html')) {
       let html = await response.text();
       html = rewriteHtml(html, target);
-      res.send(html);
-
+      data = html;
     } else if (contentType.includes('text/css')) {
       let css = await response.text();
       css = rewriteCss(css, target);
-      res.send(css);
-
+      data = css;
     } else {
-      // Alles andere (Bilder, Fonts, JS etc.) direkt durchleiten
-      const buffer = await response.buffer();
-      res.send(buffer);
+      data = await response.buffer();
     }
+
+    // In Cache speichern (nur wenn nicht zu groß, max 1MB)
+    if (Buffer.byteLength(typeof data === 'string' ? data : data) < 1024 * 1024) {
+      cache.set(target, { data, contentType, time: Date.now() });
+    }
+
+    res.send(data);
 
   } catch (err) {
     res.status(500).send(`
@@ -143,6 +130,14 @@ app.get('/proxy', async (req, res) => {
     `);
   }
 });
+
+// Cache alle 10 Minuten aufräumen
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of cache.entries()) {
+    if (now - val.time > CACHE_TIME) cache.delete(key);
+  }
+}, 10 * 60 * 1000);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Proxy läuft auf Port ${PORT}`));
